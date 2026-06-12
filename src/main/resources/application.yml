@@ -6,3 +6,15 @@ spring:
         options:
           model: gpt-5-mini
           temperature: 1
+  application:
+    name: authmind-ai
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  metrics:
+    export:
+      prometheus:
+        enabled: true

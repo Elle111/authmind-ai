@@ -8,5 +8,7 @@ public record SsoAnalysisResponse(
         String explanation,
         List<String> remediationSteps,
         List<String> oktaChecks,
-        List<String> securityNotes
+        List<String> securityNotes,
+        String ruleDetected,
+        String confidenceExplanation
 ) {}

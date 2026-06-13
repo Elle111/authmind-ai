@@ -1,3 +1,7 @@
+authmind:
+  llm:
+    provider: openai
+
 spring:
   ai:
     openai:

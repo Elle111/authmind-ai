@@ -1,13 +1,12 @@
 package com.authmind.service;
 
+import com.authmind.llm.LlmProvider;
 import com.authmind.metrics.AnalysisMetrics;
 import com.authmind.model.SsoAnalysisRequest;
 import com.authmind.model.SsoAnalysisResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Service;
 
 import java.util.UUID;
@@ -18,27 +17,20 @@ public class SsoAnalysisService {
     private static final Logger logger = LoggerFactory.getLogger(SsoAnalysisService.class);
     private static final String REQUEST_ID_KEY = "requestId";
 
-    private static final String SYSTEM_PROMPT = """
-            You are an expert enterprise SSO troubleshooting assistant specializing in Okta, SAML, OIDC, OAuth, identity federation, certificates, RelayState, JIT provisioning, and authentication policies.
-
-            Analyze the provided authentication issue and return practical remediation guidance.
-
-            Do not invent facts. If evidence is missing, say what should be checked next.
-
-            Return the response using the exact SsoAnalysisResponse structure.
-            """;
-
-    private final ChatClient chatClient;
     private final SensitiveDataSanitizer sanitizer;
+    private final PromptBuilder promptBuilder;
+    private final LlmProvider llmProvider;
     private final RuleBasedAnalyzer ruleAnalyzer;
     private final AnalysisMetrics metrics;
 
-    public SsoAnalysisService(ChatClient.Builder chatClientBuilder,
-                               SensitiveDataSanitizer sanitizer,
+    public SsoAnalysisService(SensitiveDataSanitizer sanitizer,
+                               PromptBuilder promptBuilder,
+                               LlmProvider llmProvider,
                                RuleBasedAnalyzer ruleAnalyzer,
                                AnalysisMetrics metrics) {
-        this.chatClient = chatClientBuilder.build();
         this.sanitizer = sanitizer;
+        this.promptBuilder = promptBuilder;
+        this.llmProvider = llmProvider;
         this.ruleAnalyzer = ruleAnalyzer;
         this.metrics = metrics;
     }
@@ -70,14 +62,17 @@ public class SsoAnalysisService {
             String sanitizedOktaLog = sanitizer.sanitize(request.oktaLog());
             String sanitizedOidcError = sanitizer.sanitize(request.oidcError());
 
-            String userPrompt = buildUserPrompt(sanitizedErrorMessage, sanitizedSamlTrace, sanitizedOktaLog, sanitizedOidcError);
-            logger.info("User prompt sent to AI: {}", userPrompt);
+            SsoAnalysisRequest sanitizedRequest = new SsoAnalysisRequest(
+                    sanitizedErrorMessage,
+                    sanitizedSamlTrace,
+                    sanitizedOktaLog,
+                    sanitizedOidcError
+            );
 
-            SsoAnalysisResponse aiResponse = chatClient.prompt()
-                    .system(SYSTEM_PROMPT)
-                    .user(userPrompt)
-                    .call()
-                    .entity(SsoAnalysisResponse.class);
+            String prompt = promptBuilder.buildPrompt(sanitizedRequest);
+            logger.info("User prompt sent to AI: {}", prompt);
+
+            SsoAnalysisResponse aiResponse = llmProvider.analyze(prompt);
 
             SsoAnalysisResponse response = mergeWithRuleMatch(aiResponse, ruleMatch);
 
@@ -94,25 +89,6 @@ public class SsoAnalysisService {
         } finally {
             MDC.remove(REQUEST_ID_KEY);
         }
-    }
-
-    private String buildUserPrompt(String errorMessage, String samlTrace, String oktaLog, String oidcError) {
-        StringBuilder prompt = new StringBuilder();
-        prompt.append("Error message:\n").append(errorMessage).append("\n\n");
-
-        if (samlTrace != null && !samlTrace.isBlank()) {
-            prompt.append("SAML trace:\n").append(samlTrace).append("\n\n");
-        }
-
-        if (oktaLog != null && !oktaLog.isBlank()) {
-            prompt.append("Okta System Log:\n").append(oktaLog).append("\n\n");
-        }
-
-        if (oidcError != null && !oidcError.isBlank()) {
-            prompt.append("OIDC error:\n").append(oidcError).append("\n\n");
-        }
-
-        return prompt.toString();
     }
 
     private SsoAnalysisResponse mergeWithRuleMatch(SsoAnalysisResponse aiResponse, RuleBasedAnalyzer.RuleMatch ruleMatch) {

@@ -1,5 +1,6 @@
 package com.authmind.service;
 
+import com.authmind.llm.LlmProvider;
 import com.authmind.metrics.AnalysisMetrics;
 import com.authmind.model.SsoAnalysisRequest;
 import com.authmind.model.SsoAnalysisResponse;
@@ -9,8 +10,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.prompt.Prompt;
 
 import java.util.List;
 
@@ -22,19 +21,13 @@ import static org.mockito.Mockito.*;
 class SsoAnalysisServiceTest {
 
     @Mock
-    private ChatClient.Builder chatClientBuilder;
-
-    @Mock
-    private ChatClient chatClient;
-
-    @Mock
-    private ChatClient.CallResponseSpec callResponseSpec;
-
-    @Mock
-    private ChatClient.ChatClientRequestSpec chatClientRequestSpec;
-
-    @Mock
     private SensitiveDataSanitizer sanitizer;
+
+    @Mock
+    private PromptBuilder promptBuilder;
+
+    @Mock
+    private LlmProvider llmProvider;
 
     @Mock
     private RuleBasedAnalyzer ruleAnalyzer;
@@ -46,13 +39,7 @@ class SsoAnalysisServiceTest {
 
     @BeforeEach
     void setUp() {
-        when(chatClientBuilder.build()).thenReturn(chatClient);
-        when(chatClient.prompt()).thenReturn(chatClientRequestSpec);
-        when(chatClientRequestSpec.system(any(String.class))).thenReturn(chatClientRequestSpec);
-        when(chatClientRequestSpec.user(any(String.class))).thenReturn(chatClientRequestSpec);
-        when(chatClientRequestSpec.call()).thenReturn(callResponseSpec);
-
-        service = new SsoAnalysisService(chatClientBuilder, sanitizer, ruleAnalyzer, metrics);
+        service = new SsoAnalysisService(sanitizer, promptBuilder, llmProvider, ruleAnalyzer, metrics);
     }
 
     @Test
@@ -73,6 +60,7 @@ class SsoAnalysisServiceTest {
         when(ruleAnalyzer.analyze(any(), any(), any(), any())).thenReturn(java.util.Optional.of(ruleMatch));
         when(sanitizer.sanitize("Error: app_not_configured_for_user")).thenReturn("Error: app_not_configured_for_user");
         when(sanitizer.sanitize("john@test.com")).thenReturn("[email-redacted]");
+        when(promptBuilder.buildPrompt(any())).thenReturn("Built prompt");
 
         SsoAnalysisResponse aiResponse = new SsoAnalysisResponse(
                 "AI detected cause",
@@ -85,7 +73,7 @@ class SsoAnalysisServiceTest {
                 null
         );
 
-        when(callResponseSpec.entity(SsoAnalysisResponse.class)).thenReturn(aiResponse);
+        when(llmProvider.analyze(any())).thenReturn(aiResponse);
 
         SsoAnalysisResponse result = service.analyze(request);
 
@@ -96,6 +84,8 @@ class SsoAnalysisServiceTest {
 
         verify(sanitizer).sanitize("Error: app_not_configured_for_user");
         verify(sanitizer).sanitize("john@test.com");
+        verify(promptBuilder).buildPrompt(any());
+        verify(llmProvider).analyze(any());
         verify(ruleAnalyzer).analyze(any(), any(), any(), any());
         verify(metrics).incrementRequest();
         verify(metrics).incrementSuccess();
@@ -113,6 +103,7 @@ class SsoAnalysisServiceTest {
 
         when(ruleAnalyzer.analyze(any(), any(), any(), any())).thenReturn(java.util.Optional.empty());
         when(sanitizer.sanitize("Generic error message")).thenReturn("Generic error message");
+        when(promptBuilder.buildPrompt(any())).thenReturn("Built prompt");
 
         SsoAnalysisResponse aiResponse = new SsoAnalysisResponse(
                 "AI detected cause",
@@ -125,7 +116,7 @@ class SsoAnalysisServiceTest {
                 null
         );
 
-        when(callResponseSpec.entity(SsoAnalysisResponse.class)).thenReturn(aiResponse);
+        when(llmProvider.analyze(any())).thenReturn(aiResponse);
 
         SsoAnalysisResponse result = service.analyze(request);
 
@@ -135,6 +126,8 @@ class SsoAnalysisServiceTest {
         assertNull(result.confidenceExplanation());
 
         verify(sanitizer).sanitize("Generic error message");
+        verify(promptBuilder).buildPrompt(any());
+        verify(llmProvider).analyze(any());
         verify(metrics).incrementRequest();
         verify(metrics).incrementSuccess();
         verify(metrics, never()).incrementRuleMatch();
@@ -151,11 +144,14 @@ class SsoAnalysisServiceTest {
 
         when(ruleAnalyzer.analyze(any(), any(), any(), any())).thenReturn(java.util.Optional.empty());
         when(sanitizer.sanitize("Error message")).thenReturn("Error message");
-        when(callResponseSpec.entity(SsoAnalysisResponse.class)).thenThrow(new RuntimeException("AI service error"));
+        when(promptBuilder.buildPrompt(any())).thenReturn("Built prompt");
+        when(llmProvider.analyze(any())).thenThrow(new RuntimeException("AI service error"));
 
         assertThrows(RuntimeException.class, () -> service.analyze(request));
 
         verify(sanitizer).sanitize("Error message");
+        verify(promptBuilder).buildPrompt(any());
+        verify(llmProvider).analyze(any());
         verify(metrics).incrementRequest();
         verify(metrics).incrementFailure();
         verify(metrics, never()).incrementSuccess();
@@ -173,6 +169,7 @@ class SsoAnalysisServiceTest {
         when(ruleAnalyzer.analyze(any(), any(), any(), any())).thenReturn(java.util.Optional.empty());
         when(sanitizer.sanitize("Contact john.smith@company.com")).thenReturn("Contact [email-redacted]");
         when(sanitizer.sanitize("Bearer abc123xyz")).thenReturn("Bearer [token-redacted]");
+        when(promptBuilder.buildPrompt(any())).thenReturn("Built prompt with [email-redacted] and [token-redacted]");
 
         SsoAnalysisResponse aiResponse = new SsoAnalysisResponse(
                 "Cause",
@@ -185,12 +182,12 @@ class SsoAnalysisServiceTest {
                 null
         );
 
-        when(callResponseSpec.entity(SsoAnalysisResponse.class)).thenReturn(aiResponse);
+        when(llmProvider.analyze(any())).thenReturn(aiResponse);
 
         service.analyze(request);
 
         ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
-        verify(chatClientRequestSpec).user(promptCaptor.capture());
+        verify(llmProvider).analyze(promptCaptor.capture());
 
         String capturedPrompt = promptCaptor.getValue();
         assertTrue(capturedPrompt.contains("[email-redacted]"));
@@ -215,6 +212,7 @@ class SsoAnalysisServiceTest {
             if (input.contains("Bearer")) return "Bearer [token-redacted]";
             return input;
         });
+        when(promptBuilder.buildPrompt(any())).thenReturn("Built prompt");
 
         SsoAnalysisResponse aiResponse = new SsoAnalysisResponse(
                 "Cause",
@@ -227,7 +225,7 @@ class SsoAnalysisServiceTest {
                 null
         );
 
-        when(callResponseSpec.entity(SsoAnalysisResponse.class)).thenReturn(aiResponse);
+        when(llmProvider.analyze(any())).thenReturn(aiResponse);
 
         service.analyze(request);
 
@@ -235,5 +233,7 @@ class SsoAnalysisServiceTest {
         verify(sanitizer).sanitize("SAML trace with email@test.com");
         verify(sanitizer).sanitize("Okta log with Bearer token123");
         verify(sanitizer).sanitize("OIDC error");
+        verify(promptBuilder).buildPrompt(any());
+        verify(llmProvider).analyze(any());
     }
 }

@@ -4,11 +4,11 @@ import com.authmind.model.SsoAnalysisResponse;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 
-public class OpenAiLlmProvider implements LlmProvider {
+public class OllamaLlmProvider implements LlmProvider {
 
     private final ChatClient chatClient;
 
-    public OpenAiLlmProvider(ChatModel chartModel) {
+    public OllamaLlmProvider(ChatModel chartModel) {
         this.chatClient = ChatClient.builder(chartModel).build();
     }
 

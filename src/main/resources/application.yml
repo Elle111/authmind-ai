@@ -1,17 +1,24 @@
 authmind:
   llm:
-    provider: openai
+    provider: ${AUTHMIND_LLM_PROVIDER:openai}
 
 spring:
+  application:
+    name: authmind-ai
   ai:
     openai:
-      api-key: ${OPENAI_API_KEY}
+      api-key: ${OPENAI_API_KEY:}
       chat:
         options:
           model: gpt-5-mini
           temperature: 1
-  application:
-    name: authmind-ai
+
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      chat:
+        options:
+          model: ${OLLAMA_MODEL:llama3.1}
+          temperature: 0.2
 
 management:
   endpoints:

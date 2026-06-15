@@ -29,6 +29,21 @@ class RuleBasedAnalyzerTest {
     }
 
     @Test
+    void analyze_aadsts50011_detectsRule() {
+        Optional<RuleBasedAnalyzer.RuleMatch> result = analyzer.analyze(
+                "Error: AADSTS50011",
+                null,
+                null,
+                null
+        );
+
+        assertTrue(result.isPresent());
+        assertEquals("redirect_uri_mismatch", result.get().rule());
+        assertEquals("Redirect URI mismatch", result.get().likelyCause());
+        assertEquals(90, result.get().confidence());
+    }
+
+    @Test
     void analyze_appNotConfiguredForUser_detectsRule() {
         Optional<RuleBasedAnalyzer.RuleMatch> result = analyzer.analyze(
                 "Error: app_not_configured_for_user",
@@ -197,11 +212,11 @@ class RuleBasedAnalyzerTest {
     }
 
     @Test
-    void analyze_ruleInOktaLog_detectsRule() {
+    void analyze_ruleInIdentityProviderLog_detectsRule() {
         Optional<RuleBasedAnalyzer.RuleMatch> result = analyzer.analyze(
                 "Generic error",
                 null,
-                "Okta log shows app_not_configured_for_user",
+                "Identity provider log shows app_not_configured_for_user",
                 null
         );
 

@@ -37,7 +37,8 @@ class SsoAnalysisControllerTest {
                 List.of("Check 1"),
                 List.of("Note 1"),
                 "test_rule",
-                "Confidence explanation"
+                "Confidence explanation",
+                null
         );
 
         when(ssoAnalysisService.analyze(any(SsoAnalysisRequest.class))).thenReturn(mockResponse);
@@ -77,6 +78,7 @@ class SsoAnalysisControllerTest {
                 List.of("Check 1"),
                 List.of("Note 1"),
                 null,
+                null,
                 null
         );
 
@@ -84,7 +86,7 @@ class SsoAnalysisControllerTest {
 
         mockMvc.perform(post("/api/v1/analyze")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"errorMessage\":\"Test error\",\"samlTrace\":\"SAML data\",\"oktaLog\":\"Okta log\",\"oidcError\":\"OIDC error\"}"))
+                        .content("{\"errorMessage\":\"Test error\",\"samlTrace\":\"SAML data\",\"identityProviderLog\":\"Identity provider log\",\"oidcError\":\"OIDC error\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.likelyCause").exists());
     }

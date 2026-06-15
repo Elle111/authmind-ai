@@ -9,8 +9,8 @@ public class RuleBasedAnalyzer {
 
     public record RuleMatch(String rule, String likelyCause, int confidence) {}
 
-    public Optional<RuleMatch> analyze(String errorMessage, String samlTrace, String oktaLog, String oidcError) {
-        String combinedInput = combineInputs(errorMessage, samlTrace, oktaLog, oidcError);
+    public Optional<RuleMatch> analyze(String errorMessage, String samlTrace, String identityProviderLog, String oidcError) {
+        String combinedInput = combineInputs(errorMessage, samlTrace, identityProviderLog, oidcError);
 
         if (combinedInput == null || combinedInput.isBlank()) {
             return Optional.empty();
@@ -21,6 +21,14 @@ public class RuleBasedAnalyzer {
                 "app_not_configured_for_user",
                 "User is not assigned to application",
                 95
+            ));
+        }
+
+        if (combinedInput.toLowerCase().contains("aadsts50011")) {
+            return Optional.of(new RuleMatch(
+                "redirect_uri_mismatch",
+                "Redirect URI mismatch",
+                90
             ));
         }
 
@@ -72,17 +80,17 @@ public class RuleBasedAnalyzer {
         return Optional.empty();
     }
 
-    private String combineInputs(String errorMessage, String samlTrace, String oktaLog, String oidcError) {
+    private String combineInputs(String errorMessage, String samlTrace, String identityProviderLog, String oidcError) {
         StringBuilder combined = new StringBuilder();
-        
+
         if (errorMessage != null && !errorMessage.isBlank()) {
             combined.append(errorMessage).append(" ");
         }
         if (samlTrace != null && !samlTrace.isBlank()) {
             combined.append(samlTrace).append(" ");
         }
-        if (oktaLog != null && !oktaLog.isBlank()) {
-            combined.append(oktaLog).append(" ");
+        if (identityProviderLog != null && !identityProviderLog.isBlank()) {
+            combined.append(identityProviderLog).append(" ");
         }
         if (oidcError != null && !oidcError.isBlank()) {
             combined.append(oidcError).append(" ");

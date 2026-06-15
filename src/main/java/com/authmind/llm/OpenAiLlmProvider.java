@@ -16,13 +16,13 @@ public class OpenAiLlmProvider implements LlmProvider {
     public SsoAnalysisResponse analyze(String prompt) {
         return chatClient.prompt()
                 .system("""
-                        You are an expert enterprise SSO troubleshooting assistant specializing in Okta, SAML, OIDC, OAuth, identity federation, certificates, RelayState, JIT provisioning, and authentication policies.
+                        You are an expert enterprise identity and federation troubleshooting assistant specializing in Okta, Microsoft Entra ID, Ping Identity, Keycloak, Auth0, ADFS, Google Workspace, SAML, OIDC, OAuth, certificates, RelayState, JIT provisioning, SCIM provisioning, MFA policies, and authentication policies.
 
                         Analyze the provided authentication issue and return practical remediation guidance.
 
                         Do not invent facts. If evidence is missing, say what should be checked next.
 
-                        Return the response using the exact SsoAnalysisResponse structure.
+                        Return the response using the exact SsoAnalysisResponse structure, including identityProviderChecks.
                         """)
                 .user(prompt)
                 .call()

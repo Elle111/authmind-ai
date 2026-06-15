@@ -35,11 +35,14 @@ class SsoAnalysisServiceTest {
     @Mock
     private AnalysisMetrics metrics;
 
+    @Mock
+    private com.authmind.service.identity.IdentityProviderDetector identityProviderDetector;
+
     private SsoAnalysisService service;
 
     @BeforeEach
     void setUp() {
-        service = new SsoAnalysisService(sanitizer, promptBuilder, llmProvider, ruleAnalyzer, metrics);
+        service = new SsoAnalysisService(sanitizer, promptBuilder, llmProvider, ruleAnalyzer, metrics, identityProviderDetector);
     }
 
     @Test
@@ -60,7 +63,8 @@ class SsoAnalysisServiceTest {
         when(ruleAnalyzer.analyze(any(), any(), any(), any())).thenReturn(java.util.Optional.of(ruleMatch));
         when(sanitizer.sanitize("Error: app_not_configured_for_user")).thenReturn("Error: app_not_configured_for_user");
         when(sanitizer.sanitize("john@test.com")).thenReturn("[email-redacted]");
-        when(promptBuilder.buildPrompt(any())).thenReturn("Built prompt");
+        when(promptBuilder.buildPrompt(any(), any())).thenReturn("Built prompt");
+        when(identityProviderDetector.detect(any())).thenReturn(com.authmind.model.IdentityProviderType.OKTA);
 
         SsoAnalysisResponse aiResponse = new SsoAnalysisResponse(
                 "AI detected cause",
@@ -69,6 +73,7 @@ class SsoAnalysisServiceTest {
                 List.of("AI step 1"),
                 List.of("AI check 1"),
                 List.of("AI note 1"),
+                null,
                 null,
                 null
         );
@@ -84,7 +89,7 @@ class SsoAnalysisServiceTest {
 
         verify(sanitizer).sanitize("Error: app_not_configured_for_user");
         verify(sanitizer).sanitize("john@test.com");
-        verify(promptBuilder).buildPrompt(any());
+        verify(promptBuilder).buildPrompt(any(), any());
         verify(llmProvider).analyze(any());
         verify(ruleAnalyzer).analyze(any(), any(), any(), any());
         verify(metrics).incrementRequest();
@@ -103,7 +108,8 @@ class SsoAnalysisServiceTest {
 
         when(ruleAnalyzer.analyze(any(), any(), any(), any())).thenReturn(java.util.Optional.empty());
         when(sanitizer.sanitize("Generic error message")).thenReturn("Generic error message");
-        when(promptBuilder.buildPrompt(any())).thenReturn("Built prompt");
+        when(promptBuilder.buildPrompt(any(), any())).thenReturn("Built prompt");
+        when(identityProviderDetector.detect(any())).thenReturn(com.authmind.model.IdentityProviderType.UNKNOWN);
 
         SsoAnalysisResponse aiResponse = new SsoAnalysisResponse(
                 "AI detected cause",
@@ -113,7 +119,8 @@ class SsoAnalysisServiceTest {
                 List.of("AI check 1"),
                 List.of("AI note 1"),
                 null,
-                null
+                null,
+                com.authmind.model.IdentityProviderType.UNKNOWN
         );
 
         when(llmProvider.analyze(any())).thenReturn(aiResponse);
@@ -126,7 +133,7 @@ class SsoAnalysisServiceTest {
         assertNull(result.confidenceExplanation());
 
         verify(sanitizer).sanitize("Generic error message");
-        verify(promptBuilder).buildPrompt(any());
+        verify(promptBuilder).buildPrompt(any(), any());
         verify(llmProvider).analyze(any());
         verify(metrics).incrementRequest();
         verify(metrics).incrementSuccess();
@@ -144,13 +151,14 @@ class SsoAnalysisServiceTest {
 
         when(ruleAnalyzer.analyze(any(), any(), any(), any())).thenReturn(java.util.Optional.empty());
         when(sanitizer.sanitize("Error message")).thenReturn("Error message");
-        when(promptBuilder.buildPrompt(any())).thenReturn("Built prompt");
+        when(promptBuilder.buildPrompt(any(), any())).thenReturn("Built prompt");
+        when(identityProviderDetector.detect(any())).thenReturn(com.authmind.model.IdentityProviderType.UNKNOWN);
         when(llmProvider.analyze(any())).thenThrow(new RuntimeException("AI service error"));
 
         assertThrows(RuntimeException.class, () -> service.analyze(request));
 
         verify(sanitizer).sanitize("Error message");
-        verify(promptBuilder).buildPrompt(any());
+        verify(promptBuilder).buildPrompt(any(), any());
         verify(llmProvider).analyze(any());
         verify(metrics).incrementRequest();
         verify(metrics).incrementFailure();
@@ -169,7 +177,8 @@ class SsoAnalysisServiceTest {
         when(ruleAnalyzer.analyze(any(), any(), any(), any())).thenReturn(java.util.Optional.empty());
         when(sanitizer.sanitize("Contact john.smith@company.com")).thenReturn("Contact [email-redacted]");
         when(sanitizer.sanitize("Bearer abc123xyz")).thenReturn("Bearer [token-redacted]");
-        when(promptBuilder.buildPrompt(any())).thenReturn("Built prompt with [email-redacted] and [token-redacted]");
+        when(promptBuilder.buildPrompt(any(), any())).thenReturn("Built prompt with [email-redacted] and [token-redacted]");
+        when(identityProviderDetector.detect(any())).thenReturn(com.authmind.model.IdentityProviderType.UNKNOWN);
 
         SsoAnalysisResponse aiResponse = new SsoAnalysisResponse(
                 "Cause",
@@ -179,7 +188,8 @@ class SsoAnalysisServiceTest {
                 List.of(),
                 List.of(),
                 null,
-                null
+                null,
+                com.authmind.model.IdentityProviderType.UNKNOWN
         );
 
         when(llmProvider.analyze(any())).thenReturn(aiResponse);
@@ -201,7 +211,7 @@ class SsoAnalysisServiceTest {
         SsoAnalysisRequest request = new SsoAnalysisRequest(
                 "Error message",
                 "SAML trace with email@test.com",
-                "Okta log with Bearer token123",
+                "Identity provider log with Bearer token123",
                 "OIDC error"
         );
 
@@ -212,7 +222,8 @@ class SsoAnalysisServiceTest {
             if (input.contains("Bearer")) return "Bearer [token-redacted]";
             return input;
         });
-        when(promptBuilder.buildPrompt(any())).thenReturn("Built prompt");
+        when(promptBuilder.buildPrompt(any(), any())).thenReturn("Built prompt");
+        when(identityProviderDetector.detect(any())).thenReturn(com.authmind.model.IdentityProviderType.UNKNOWN);
 
         SsoAnalysisResponse aiResponse = new SsoAnalysisResponse(
                 "Cause",
@@ -222,7 +233,8 @@ class SsoAnalysisServiceTest {
                 List.of(),
                 List.of(),
                 null,
-                null
+                null,
+                com.authmind.model.IdentityProviderType.UNKNOWN
         );
 
         when(llmProvider.analyze(any())).thenReturn(aiResponse);
@@ -231,9 +243,9 @@ class SsoAnalysisServiceTest {
 
         verify(sanitizer).sanitize("Error message");
         verify(sanitizer).sanitize("SAML trace with email@test.com");
-        verify(sanitizer).sanitize("Okta log with Bearer token123");
+        verify(sanitizer).sanitize("Identity provider log with Bearer token123");
         verify(sanitizer).sanitize("OIDC error");
-        verify(promptBuilder).buildPrompt(any());
+        verify(promptBuilder).buildPrompt(any(), any());
         verify(llmProvider).analyze(any());
     }
 }

@@ -7,8 +7,9 @@ public record SsoAnalysisResponse(
         int confidenceScore,
         String explanation,
         List<String> remediationSteps,
-        List<String> oktaChecks,
+        List<String> identityProviderChecks,
         List<String> securityNotes,
         String ruleDetected,
-        String confidenceExplanation
+        String confidenceExplanation,
+        IdentityProviderType identityProvider
 ) {}

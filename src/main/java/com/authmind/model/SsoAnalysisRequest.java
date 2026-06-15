@@ -8,7 +8,7 @@ public record SsoAnalysisRequest(
 
         String samlTrace,
 
-        String oktaLog,
+        String identityProviderLog,
 
         String oidcError
 ) {}
